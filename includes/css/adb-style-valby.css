@@ -1,0 +1,75 @@
+table, tr, td {
+    border: 0px solid #000000;
+}
+
+
+table.sortable td:first-child {  /* Sikrer at første kolonne er bred nok til thumbnails */
+width: 145px;
+}
+
+
+
+.adb_thumbnail {
+        max-width: 133px;
+        height: auto;    
+        /* width: 50px; */
+        /* height: 50px; */
+}
+.adb_img_container {
+        display: flex;
+}
+
+.adb_img {
+    margin: 0px;
+    padding: 5px;
+    border: 0px solid #0000ff;
+    /* height: 65px; */
+    /* width: 65px; */    
+    float: left;
+}
+
+.adb_img img {
+    display: inline-block;
+    margin: 5px;
+    border: 1px solid #000;
+    height: auto;
+    max-width: none;    
+}
+
+.adb_img a:hover img {
+    border:1px solid #0000ff;
+}
+
+.adb_img_desc {
+    text-align: center;
+    font-weight: normal;
+    width: 120px;
+    margin: 5px;
+}
+
+.adb_searchresult_container {
+        
+}
+
+.adb_searchresult {
+    margin: 0px;
+    padding: 5px;
+    border: 0px solid #0000ff;
+    height: 65px;
+    width: 65px;
+}
+
+.adb_searchresult img {
+    display: list-item;
+    margin: 5px;
+    border: 1px solid #000;
+    float: left;
+}
+
+.adb_searchresult a:hover img {
+    border:1px solid #0000ff;
+}
+
+.adb_searchresult_desc {
+    float: left;
+}
