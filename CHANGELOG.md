@@ -1,5 +1,10 @@
 # Ændringer
 
+## 1.3.1
+
+- Forfatternavnet er rettet til Maltex Gruppen.
+- README henviser til Maltex Gruppen og Arkivdatabasen.
+
 ## 1.3.0
 
 - GitHub Releases som opdateringskilde med mulighed for WordPress-autoopdatering.

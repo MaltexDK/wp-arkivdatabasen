@@ -1,6 +1,7 @@
 # Arkivdatabasen til WordPress
 
-Søgning og visning af data fra Arkivdatabasens API via shortcoden `[adb]`.
+Pluginet udvikles af [Maltex Gruppen](https://www.maltex.dk/).
+Søgning og visning af data fra [Arkivdatabasen](https://www.arkivdatabasen.dk/) via shortcoden `[adb]`.
 Kræver WordPress 6.0 eller nyere og PHP 7.4 eller nyere.
 
 ## Installation og automatisk opdatering
@@ -25,8 +26,8 @@ WordPress-serveren skal have HTTPS-adgang til api.github.com, github.com og GitH
 ## Udgiv en ny version
 
 1. Ret både `Version` og `ADB_VERSION` i `arkivdatabasen.php`, og opdatér CHANGELOG.md.
-2. Kør regressionstesten mod en lokal WordPress, kontrollér PHP-syntaks, og byg med `python3 scripts/build-release.py v1.3.0` (brug det nye versionsnummer).
-3. Commit og push ændringerne. Opret og push tagget, fx `git tag v1.3.0` og `git push origin v1.3.0`.
+2. Kør regressionstesten mod en lokal WordPress, kontrollér PHP-syntaks, og byg med `python3 scripts/build-release.py v1.3.1` (brug det nye versionsnummer).
+3. Commit og push ændringerne. Opret og push tagget, fx `git tag v1.3.1` og `git push origin v1.3.1`.
 4. Workflowet `.github/workflows/release.yml` bygger `arkivdatabasen.zip` og opretter en stabil Release med filen. Kontroller workflowresultatet og download ZIP-filen anonymt.
 
 Tagget skal matche pluginheaderen. Flyt ikke allerede udgivne tags. Hvis workflowet afvises, kan den lokalt byggede ZIP uploades til en manuelt oprettet Release med samme tag.
@@ -40,7 +41,7 @@ WP_LOAD_PATH=/sti/til/wordpress/wp-load.php php tests/regression.php
 npm ci --ignore-scripts
 npm test
 node --check includes/adb-ui.js
-python3 scripts/build-release.py v1.3.0
+python3 scripts/build-release.py v1.3.1
 ```
 
 Testen bruger lokale syntetiske HTTP-svar og ændrer ikke arkivindstillingerne. Den validerer søgning, detaljevisning, encoding, escaping, fejlsvar og GitHub-opdateringsmetadata. Den erstatter ikke en afprøvning mod det virkelige arkiv.

@@ -3,16 +3,17 @@
 Plugin Name: Arkivdatabasen
 Plugin URI: https://github.com/MaltexDK/wp-arkivdatabasen
 Description: Søgning og visning af data fra en tilknyttet Arkivdatabase.
-Version: 1.3.0
+Version: 1.3.1
 Requires at least: 6.0
 Requires PHP: 7.4
-Author: Maltexgruppen
+Author: Maltex Gruppen
+Author URI: https://www.maltex.dk/
 License: GPL-2.0-or-later
 Update URI: https://github.com/MaltexDK/wp-arkivdatabasen
 Text Domain: adb_domain
 */
 if (!defined('ABSPATH')) { exit; }
-define('ADB_VERSION', '1.3.0');
+define('ADB_VERSION', '1.3.1');
 define('ADB_FILE', __FILE__);
 $adb_plugin_name = 'Arkivdatabasen';
 $adb_shortcode = '[adb]';
