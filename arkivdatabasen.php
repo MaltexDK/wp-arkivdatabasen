@@ -1,31 +1,34 @@
 <?php
 /*
 Plugin Name: Arkivdatabasen
-Plugin URI:  http://www.arkivdatabasen.dk/plugin
-Description: Dette plugin henter data fra en tilknyttet arkivbase. Det kr&aelig;ves at arkivdatabasens API er aktiveret og at man kender API-n&oslash;glen.
-Version:     1.2
-Author:      Maltexgruppen
-Author URI:  http://www.maltex.dk/
-License:     GPL2
-License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Plugin URI: https://github.com/MaltexDK/wp-arkivdatabasen
+Description: Søgning og visning af data fra en tilknyttet Arkivdatabase.
+Version: 1.3.0
+Requires at least: 6.0
+Requires PHP: 7.4
+Author: Maltexgruppen
+License: GPL-2.0-or-later
+Update URI: https://github.com/MaltexDK/wp-arkivdatabasen
+Text Domain: adb_domain
 */
-
-/******************************
-* global variables
-******************************/
-
-$adb_prefix = 'adb_';
+if (!defined('ABSPATH')) { exit; }
+define('ADB_VERSION', '1.3.0');
+define('ADB_FILE', __FILE__);
 $adb_plugin_name = 'Arkivdatabasen';
 $adb_shortcode = '[adb]';
-
-// retrieve our plugin settings from the options table
-$adb_options = get_option('adb_settings');
-
-/******************************
-* includes
-******************************/
-
-include('includes/scripts.php'); // this controls all JS / CSS
-include('includes/data-processing.php'); // this controls all saving of data
-include('includes/display-functions.php'); // display content functions
-include('includes/admin-page.php'); // the plugin options page HTML and save functions
+require_once __DIR__ . '/includes/data-processing.php';
+$adb_options = adb_get_options();
+require_once __DIR__ . '/includes/scripts.php';
+require_once __DIR__ . '/includes/display-functions.php';
+require_once __DIR__ . '/includes/admin-page.php';
+require_once __DIR__ . '/vendor/plugin-update-checker/plugin-update-checker.php';
+$adb_update_checker = YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+    'https://github.com/MaltexDK/wp-arkivdatabasen', __FILE__, 'arkivdatabasen'
+);
+$adb_update_checker->setBranch('main');
+// Never offer an unbuilt branch/tag archive as an automatic update.
+$adb_update_checker->getVcsApi()->enableReleaseAssets('/^arkivdatabasen\.zip$/', YahnisElsts\PluginUpdateChecker\v5p6\Vcs\Api::REQUIRE_RELEASE_ASSETS);
+$adb_update_checker->addResultFilter(function ($info) {
+    if (!$info || !preg_match('~^https://github\.com/MaltexDK/wp-arkivdatabasen/releases/download/[^/]+/arkivdatabasen\.zip$~', $info->download_url ?? '')) { return null; }
+    return $info;
+});

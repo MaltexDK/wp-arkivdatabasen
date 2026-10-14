@@ -1,648 +1,164 @@
 <?php
-
-// Our display functions for outputting information
-
-// Create security string to add the search url
-function adb_security($arkiv=1) {
-	global $adb_options;
-
-	$timestamp = gmdate('U');
-	if($arkiv==1){
-		$signatur = md5($adb_options['api_key'] . $timestamp);
-	}
-	elseif($arkiv==2){
-		$signatur = md5($adb_options['api2_key'] . $timestamp);
-	}
-
-	$security_code = 'timestamp='.$timestamp.'&signatur='.$signatur;
-
-	return $security_code;
+if (!defined('ABSPATH')) { exit; }
+function adb_security($arkiv = 1) {
+    global $adb_options;
+    $timestamp = gmdate('U');
+    return http_build_query(['timestamp'=>$timestamp, 'signatur'=>md5($adb_options[$arkiv === 2 ? 'api2_key' : 'api_key'].$timestamp)], '', '&');
 }
-
-// Checks the API
-function adb_security_check($arkiv=1)
-{
-	global $adb_options;
-
-	$security_string = adb_security($arkiv);
-
-	if($arkiv==1){
-		$check_url = $adb_options['database_url'].'?'.$security_string.'&action=get_check';
-	}
-	elseif($arkiv==2){
-		$check_url = $adb_options['database2_url'].'?'.$security_string.'&action=get_check';
-	}
-
-	$request = wp_remote_get( $check_url );
-	if( is_wp_error( $request ) ){
-		return false;
-	}
-	$body = wp_remote_retrieve_body( $request );
-	$body = utf8_encode($body);
-	$data = json_decode($body,true);
-	return $data;
+function adb_api_url($action, $params = [], $arkiv = 1) {
+    global $adb_options;
+    $url = $adb_options[$arkiv === 2 ? 'database2_url' : 'database_url'];
+    if (!$url) { return ''; }
+    parse_str(adb_security($arkiv), $security);
+    return add_query_arg(array_map('rawurlencode', array_merge($params, $security, ['action'=>$action])), $url);
 }
-
-function adb_security_checkurl($arkiv=1)
-{
-	global $adb_options;
-
-	$security_string = adb_security($arkiv);
-
-	if($arkiv==1){
-		$check_url = $adb_options['database_url'].'?'.$security_string.'&action=get_check';
-	}
-	elseif($arkiv==2){
-		$check_url = $adb_options['database2_url'].'?'.$security_string.'&action=get_check';
-	}
-
-	return $check_url;
+function adb_api_request($action, $params = [], $arkiv = 1) {
+    $url = adb_api_url($action, $params, $arkiv);
+    if (!$url) { return new WP_Error('adb_configuration', 'Arkivet er ikke konfigureret.'); }
+    // Preserve the archive API's existing signature and supported legacy encoding.
+    $response = wp_remote_get($url, ['timeout'=>$action === 'get_search' ? 120 : 15]);
+    if (is_wp_error($response)) { return $response; }
+    if (wp_remote_retrieve_response_code($response) !== 200) {
+        return new WP_Error('adb_http', 'Databasen svarer ikke. Prøv igen senere.');
+    }
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body, true);
+    if (json_last_error() === JSON_ERROR_UTF8) {
+        $body = iconv('ISO-8859-1', 'UTF-8', $body);
+        $data = $body === false ? null : json_decode($body, true);
+    }
+    if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+        return new WP_Error('adb_json', 'Arkivet returnerede et ugyldigt svar.');
+    }
+    return $data;
 }
-
-// Main functionality build in a single short code
-function adb_shortcode( $atts, $content = NULL ) 
-{
-	global $adb_options;
-	global $adb_plugin_name;
-
-	$security_string = adb_security();
-	$base_url = $adb_options['database_url'].'?'.$security_string;
-	
-	// Check the API-key and give a message
-	$security_check = adb_security_check();
-	$adb_arkivnavn = $security_check['arkivnavn'];
-
-
-	if ($security_check)
-	{
-		if (!$security_check['error'])
-		{
-			// Check om der er et sekundært arkiv og alt er i orden (hvis det ikke er i orden lader vi bare som om der IKKE er et sekundært arkiv)
-			$secondarchive_check = adb_security_check(2);
-			$secondarchive = 0;
-			$usesecond = 0;
-				if($secondarchive_check){
-					if(!$secondarchive_check['error']){
-						$secondarchive = 1;
-						$adb_arkivnavn2 = $secondarchive_check['arkivnavn'];
-						if (isset($_POST['usesecond']))
-						{
-							$usesecond = $_POST['usesecond'];
-						}
-						else
-						{
-							if(isset($_GET['usesecond']))
-								{
-								$usesecond = $_GET['usesecond'];
-								}
-						}
-						if($usesecond){
-							// Sekundært arkiv aktivt - override!
-								$security_string = adb_security(2);
-								$base_url = $adb_options['database2_url'].'?'.$security_string;
-								$adb_arkivnavn = $adb_arkivnavn2;
-						}				
-					}
-				}
-
-			if(array_key_exists("visnavn", $adb_options)){
-				if($adb_options['visnavn'])
-				{
-					$content .= '<h2>Søg i '.$adb_arkivnavn.'</h2>';
-				}
-			}
-			if($usesecond)
-			{
-				$content .= '<p><strong>Der søges i alternativ samling!</strong></p>';
-			}
-			if (isset($_GET['action']))
-			{
-				$action = $_GET['action'];
-			}
-			else
-			{
-				$action = FALSE;
-			}
-			// Show this when clicking on a search result
-			if ($action == 'get_details' && isset($_GET['id']))
-			{
-
-				if (isset($_GET["sortering"])){
-					$this_sortering = $_GET["sortering"];
-				}
-				else{
-					$this_sortering = $adb_options['sortering'];
-				}
-
-
-				$search_url = $base_url.'&action=get_details&id='.htmlspecialchars($_GET['id']).'&arkivnummer='.htmlspecialchars($_GET['arkivnummer']);
-				$request = wp_remote_get( $search_url );
-
-				if( is_wp_error( $request ) ) 
-				{
-					return false; 
-				}
-
-				$body = wp_remote_retrieve_body( $request );
-				$body = utf8_encode($body);
-				$data = json_decode( $body, true );
-
-				if( ! empty( $data ) ) 
-				{
-					if ( isset($data['error']) && $data['error']==true)
-					{
-						$content .= '<p><strong>'.$data['errormessage'].'</p></strong>';
-					}
-					else 
-					{
-						$content .= '<h3>'.$data['Titel'].'</h3>';
-						if($data['Titel'] != $data['Forklaring']){
-							$content .= '<p>'.$data['Forklaring'].'</p>';
-						}
-						$content .= '<div class="adb_img_container">';
-						if (!empty($data['Billeder']))
-						{
-							if($adb_options['featherlight']=="featherlight")
-								{
-								$content .= '<style>@import url("//cdn.rawgit.com/noelboss/featherlight/1.3.2/release/featherlight.min.css");</style>';
-								$content .= '<script src="//code.jquery.com/jquery-latest.js"></script>';
-								$content .= '<script src="//cdn.rawgit.com/noelboss/featherlight/1.3.2/release/featherlight.min.js" type="text/javascript" charset="utf-8"></script>';
-								}
-							foreach( $data['Billeder'] as $image )
-							{
-								if (is_array($image))
-								{
-									if($adb_options['featherlight']=="featherlight")
-									{
-									$content .= '<div class="adb_img_large"><a href="#" data-featherlight="'.$image['url'].'"><img src='.$image['thumpnail'].' /></a></div>';
-									}
-									else
-									{
-									$content .= '<div class="adb_img_large"><a href="'.$image['url'].'"><img src='.$image['thumpnail'].' /></a></div>';
-									}
-								}
-								else
-								{
-									$content .= '';
-								}
-							}
-						}
-						else
-						{
-							$content .= '';
-						}
-						$content .= '</div>';
-
-						$content .= '<h4>Standardinformation</h4>';
-						$content .= '<table class=\"wp-list-table widefat fixed posts\">';
-						$content .= '<tr><td>Registreringsnummer</td><td>'.$data['Registreringsnummer'].'</td></tr>';
-						$content .= '<tr><td>Registreringsdato</td><td>'.$data['Registreringsdato'].'</td></tr>';
-						$content .= '<tr><td>Tidsperiode</td><td>';
-						if ($data['periode_start']==$data['periode_slut']){
-							$content .= $data['periode_start'];
-						}
-						else{
-							$content .= $data['periode_start'].' - '.$data['periode_slut'];
-						}
-						$content .= '</td></tr>';
-						$content .= '<tr><td>Placering</td><td>'.$data['Placering'].'</td></tr>';
-						$content .= '<tr><td>Arkiv</td><td><a href='.$data['Hjemmeside'].' target=_blank>'.$data['Arkiv'].'</a></td></tr>';
-						// $content .= '<tr><td>Arkivdatabase</td><td><a href='.$data['Arkivdatabase'].' target=_blank>Arkivdatabase</a></td></tr>';
-						$content .= '</table>';
-
-						
-						if (!empty($data['Filer']))
-						{
-							$content .= '<h4>Filer</h4>';
-							$content .= '<ul>';
-							foreach( $data['Filer'] as $file )
-							{
-								if (is_array($file))
-								{
-									$content .= '<li><a href='.$file['url'].' target=_new>'.$file['filnavn'].'</a></li>';
-								}
-								else
-								{
-									$content .= '';
-								}
-							}
-							$content .= '</ul>';
-						}
-						else
-						{
-							$content .= '';
-						}
-
-						$content .= '<h4>'.$data['Registreringstype'].'</h4>';
-						$content .= '<table>';
-						if (!empty($data['Registreringstypeindhold']))
-						{
-							foreach( $data['Registreringstypeindhold'] as $type => $typeinfo )
-							{
-								if($typeinfo)
-								{
-									$content .= '<tr><td>'.$type.'</td><td>'.$typeinfo.'</td></tr>';
-								}
-							}
-						}
-						else
-						{
-							$content .= '<li>Der er ikke yderligere information om indholdet.</li>';
-						}
-						$content .= '</table>';
-
-						if (!empty($data['Links']))
-						{
-							$content .= '<h4>Links (henvisninger)</h4>';
-							$content .= '<ul>';
-							foreach( $data['Links'] as $link )
-							{
-								if (is_array($link))
-								{
-									$content .= '<li><a href='.$link['url'].' target=_new>'.$link['titel'].'</a></li>';
-								}
-								else
-								{
-									$content .= '';
-								}
-							}
-							$content .= '</ul>';
-						}
-						else
-						{
-							$content .= '';
-						}
-
-
-						if ($data['Emneord'][0]!="")
-						{
-							$form_url = esc_url( $_SERVER["REDIRECT_URL"] ) .'?action=get_search';
-
-							$content .= '<h4>Emneord</h4>';
-							$content .= '<ul>';
-
-
-							$content .= '<form name="searchform" action='.$form_url.' method="post">';
-							$content .= '<input type="hidden" name="string" value="">';
-							$content .= '<input type="hidden" id="sortering" name="sortering" value="'.$this_sortering.'">';
-							$content .= '<input type="hidden" name="usesecond" value="'.$usesecond.'">';
-							$content .= '<input type="hidden" name="method" value="emneord">';
-							$content .= '</form>';
-
-
-							$content .= '<script>';
-							$content .= 'function submitsearch(string){';
-							$content .= '	document.searchform.string.value = string;';
-							$content .= '	document.searchform.submit();';
-							$content .= '}';
-							$content .= '</script>';
-
-							foreach( $data['Emneord'] as $tag )
-							{
-								$content .= '<li><a href="#" onClick="submitsearch(\''.$tag.'\')" >'.$tag.'</a></li>';
-
-							}
-						$content .= '</ul>';
-						}
-						else
-						{
-							$content .= '';
-						}
-						$content .= '<p><input type="button" value="Tilbage" onClick="window.history.back();"></p></td>';						
-					}
-				} 
-			}
-			// Show this when database page is viewed first time and at search result
-			else
-			{
-			$method = 'string';
-				// Show this after search
-				$form_url = esc_url( $_SERVER["REDIRECT_URL"] ) .'?action=get_search';
-
-				$content .= '<script>';
-				$content .= 'function checksearch(){';
-				$content .= ' if(document.searchform.string.value!=""){';
-				$content .= '	 return true;';
-				$content .= '	 }';
-				$content .= '	else {'; 
-				$content .= '	 alert("En søgning kan ikke være tom");';
-				$content .= '	 return false;';
-				$content .= '	 }';
-				$content .= '}';
-				$content .= '</script>';
-
-			if (isset($_POST["string"])){
-				$this_sogestreng = $_POST["string"];
-			}
-			else{
-				$this_sogestreng = "";
-			}
-
-			if (isset($_POST["sortering"])){
-				$this_sortering = $_POST["sortering"];
-			}
-			else{
-				$this_sortering = $adb_options['sortering'];
-			}
-
-
-				if ($action == 'get_search' && isset($_POST['string']))
-				{
-					if (isset($_POST['method']) )
-					{
-						$method = $_POST['method'];
-					}
-					$search_url = $base_url.'&action=get_search&string='.urlencode($_POST['string']).'&method='.$method;
-					$timeout = 120;
-					$request = wp_remote_get( $search_url, array( 'timeout' => $timeout ));
-					$response_code = wp_remote_retrieve_response_code( $request );
-
-					if( is_wp_error( $request ) ) 
-					{
-						$content .= "<p><strong>WP fejlkode: ".$response_code."</strong></p>"; 
-					}
-
-					if( $response_code != 200  ) 
-					{
-						$content .= '<p><strong>Databasen svarer ikke!</strong> Prøv igen. Hvis problemet gentager sig kan der være problemer med databasen eller den opsatte forbindelse.</p>';
-					}
-					else
-					{
-						$body = wp_remote_retrieve_body( $request );
-						$body = utf8_encode($body);
-						$data = json_decode( $body, true );
-
-						if( ! empty( $data ) ) 
-						{
-							if ( isset($data['error']) && $data['error']==true)
-							{
-								$content .= '<p><strong>'.$data['errormessage'].'!</strong> Kontroller indstillingerne om du har angivet den korrekt API-nøgle.</p>';
-							}
-							else 
-							{
-								$content .= '<p>Søgningen gav <strong>'.count($data).'</strong> resultater.</p>';
-
-								$content .= '<script src="../wp-content/plugins/arkivdatabasen/includes/sorttable.js"></script>';
-								$content .= '<style>';
-								$content .= '/* Sortable tables */';
-								$content .= 'table.sortable thead {';
-								$content .= 'font-weight: bold;';
-								$content .= 'cursor: hand;';
-								$content .= '}';
-								$content .= 'table.sortable th:not(.sorttable_sorted):not(.sorttable_sorted_reverse):not(.sorttable_nosort):after { ';
-								$content .= 'content: " \25B4\25BE" ';
-								$content .= '}';
-								$content .= 'table.sortable tbody tr:nth-child(2n) td {';
- 								$content .= '';
-								$content .= '}';
-								$content .= 'table.sortable tbody tr:nth-child(2n+1) td {';
-								$content .= '';
-								$content .= '}';
-								$content .= '/* Sortable tables */';
-								$content .= '</style>';
-								
-								if(($adb_options['sogplacering']=="2")||($adb_options['sogplacering']=="3")){
-									$content .= '<form name="searchform" action="'.$form_url.'" method="post">';
-									$content .= ' <input type="hidden" name="sortering" id="sortering" value="'.$this_sortering.'">';
-									$content .= '<p><input type="text" name="string" size="40" value="'.$this_sogestreng.'">';
-									$content .= ' <input type="submit" value="Søg" onClick="return checksearch()"></p>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="string") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="string"> Som sætning<br/>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="and") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="and"> Alle ordene<br/>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="or") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="or"> Mindst et af ordene<br/>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="emneord") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="emneord"> Som emneord<br/><br/>';
-									if($secondarchive)
-									{
-										$content .= '<input type="checkbox" name="usesecond" ';
-										if (isset($usesecond) && $usesecond=="1") 
-										{ 
-											$content .= 'checked ';
-										}
-										$content .= 'value="1"> Søg i alternativ samling: '.$adb_arkivnavn2.'<br/>';
-									}
-									$content .= '</form><p>&nbsp;</p>';
-								}
-
- 								$content .= '<table class="sortable">';
- 								$content .= '<thead>';
- 								$content .= '<tr>';
- 								if($adb_options['resultatvisning']['billede']=="1"){$content .= '<th class="sorttable_nosort"></th>';}
- 								$content .= '<th id="titel" onClick="document.getElementById(\'sortering\').value = \'titel\'">Titel</th>';
- 								if($adb_options['resultatvisning']['periode']=="1"){$content .= '<th class="sortable_alpha" id="periode" onClick="document.getElementById(\'sortering\').value = \'periode\'">Periode</th>';}
- 								if($adb_options['resultatvisning']['arkiv']=="1"){$content .= '<th id="arkiv" onClick="document.getElementById(\'sortering\').value = \'arkiv\'">Arkiv</th>';}
- 								if($adb_options['resultatvisning']['materialetype']=="1"){$content .= '<th id="materialetype" onClick="document.getElementById(\'sortering\').value = \'materialetype\'">Materialetype</th>';}
- 								if($adb_options['resultatvisning']['placering']=="1"){$content .= '<th id="placering" onClick="document.getElementById(\'sortering\').value = \'placering\'">Placering</th>';}
- 								if($adb_options['resultatvisning']['registreringsdato']=="1"){$content .= '<th id="registreringsdato" onClick="document.getElementById(\'sortering\').value = \'registreringsdato\'">Reg.dato</th>';}
- 								$content .= '</tr>';
- 								$content .= '</thead>';
-								$content .= '<tbody>';
-								foreach( $data as $value ) 
-								{
-									$content .= '<tr>';
-									if (empty($value['thumbnail'])) 
-									{
-										$thumbnail = plugins_url( 'images/noimage.gif', dirname(__FILE__) );
-									}
-									else
-									{
-										$thumbnail = $value['thumbnail'];
-									}
-									if($adb_options['resultatvisning']['billede']=="1"){$content .= '<td align="center"><a href='.$_SERVER["REDIRECT_URL"].'?action=get_details&id='.$value['id'].'&sortering='.$this_sortering.'&usesecond='.$usesecond.'&arkivnummer='.$value['arkivnummer'].'><img src='.$thumbnail.' alt='.$value['navn'].' class="adb_thumbnail" /></a></td>';}
-									$content .= '<td><a href='.$_SERVER["REDIRECT_URL"].'?action=get_details&id='.$value['id'].'&sortering='.$this_sortering.'&usesecond='.$usesecond.'&arkivnummer='.$value['arkivnummer'].'>'.$value['navn'].'</a></td>';
-									if($adb_options['resultatvisning']['periode']=="1"){
-										// reducer dato til årstal
-										$value['periode_start']=substr($value['periode_start'], 6, 4);
-										$value['periode_slut']=substr($value['periode_slut'], 6, 4);
-										if ($value['periode_start']==$value['periode_slut']){
-											$content .= '<td>'.$value['periode_start'].'</td>';
-										}
-										else{
-											$content .= '<td>'.$value['periode_start'].' - '.$value['periode_slut'].'</td>';
-										}
-									}
-									if($adb_options['resultatvisning']['arkiv']=="1"){$content .= '<td>'.$value['arkiv'].'</td>';}
-									if($adb_options['resultatvisning']['materialetype']=="1"){$content .= '<td>'.$value['materialetype'].'</td>';}
-									if($adb_options['resultatvisning']['placering']=="1"){$content .= '<td>'.$value['placering'].'</td>';}
-									if($adb_options['resultatvisning']['registreringsdato']=="1"){$content .= '<td>'.$value['dato'].'</td>';}
-									$content .= '</tr>';
-								}
-								$content .= '</tbody>';
-								$content .= '</table>';
-						
-								$content .= '<script>';
-								$content .= '	document.addEventListener("DOMContentLoaded", () => {';
-								$content .= '		var startsortering = "'.$this_sortering.'";';
-								$content .= '		sorttable.innerSortFunction.apply(document.getElementById(startsortering), []);';
-								$content .= '	})';
-								$content .= '</script>';
-
-							}
-						} 
-						else 
-						{
-							$content .= '<p>Søgningen gav <strong>ingen</strong> resultater. Prøv at udvide din søgning!</p>';
-
-								if($adb_options['sogplacering']=="2"){
-									$content .= '<form name="searchform" action="'.$form_url.'" method="post">';
-									$content .= ' <input type="hidden" name="sortering" id="sortering" value="'.$this_sortering.'">';
-									$content .= '<p><input type="text" name="string" size="40" value="'.$this_sogestreng.'">';
-									$content .= ' <input type="submit" value="Søg" onClick="return checksearch()"></p>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="string") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="string"> Som sætning<br/>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="and") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="and"> Alle ordene<br/>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="or") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="or"> Mindst et af ordene<br/>';
-									$content .= '<input type="radio" name="method" ';
-									if (isset($method) && $method=="emneord") 
-									{ 
-										$content .= 'checked ';
-									}
-									$content .= 'value="emneord"> Som emneord<br/><br/>';
-									if($secondarchive)
-									{
-										$content .= '<input type="checkbox" name="usesecond" ';
-										if (isset($usesecond) && $usesecond=="1") 
-										{ 
-											$content .= 'checked ';
-										}
-										$content .= 'value="1"> Søg i alternativ samling: '.$adb_arkivnavn2.'<br/>';
-									}
-									$content .= '</form><p>&nbsp;</p>';
-								}
-
-						}
-					}
-				}
-				else{
-					if($adb_options['sogplacering']=="2"){
-						$content .= '<form name="searchform" action="'.$form_url.'" method="post">';
-						$content .= ' <input type="hidden" name="sortering" id="sortering" value="'.$this_sortering.'">';
-						$content .= '<p><input type="text" name="string" size="40" value="'.$this_sogestreng.'">';
-						$content .= ' <input type="submit" value="Søg" onClick="return checksearch()"></p>';
-						$content .= '<input type="radio" name="method" ';
-						if (isset($method) && $method=="string") 
-						{ 
-							$content .= 'checked ';
-						}
-						$content .= 'value="string"> Som sætning<br/>';
-						$content .= '<input type="radio" name="method" ';
-						if (isset($method) && $method=="and") 
-						{ 
-							$content .= 'checked ';
-						}
-						$content .= 'value="and"> Alle ordene<br/>';
-						$content .= '<input type="radio" name="method" ';
-						if (isset($method) && $method=="or") 
-						{ 
-							$content .= 'checked ';
-						}
-						$content .= 'value="or"> Mindst et af ordene<br/>';
-						$content .= '<input type="radio" name="method" ';
-						if (isset($method) && $method=="emneord") 
-						{ 
-							$content .= 'checked ';
-						}
-						$content .= 'value="emneord"> Som emneord<br/><br/>';
-						if($secondarchive)
-						{
-							$content .= '<input type="checkbox" name="usesecond" ';
-							if (isset($usesecond) && $usesecond=="1") 
-							{ 
-								$content .= 'checked ';
-							}
-							$content .= 'value="1"> Søg i alternativ samling: '.$adb_arkivnavn2.'<br/>';
-						}
-						$content .= '</form>';
-					}
-				}
-
-				if(($adb_options['sogplacering']=="1")||($adb_options['sogplacering']=="3")){
-					$content .= '<form name="searchform" action="'.$form_url.'" method="post">';
-					$content .= ' <input type="hidden" name="sortering" id="sortering" value="'.$this_sortering.'">';
-					$content .= '<p><input type="text" name="string" size="40" value="'.$this_sogestreng.'">';
-					$content .= ' <input type="submit" value="Søg" onClick="return checksearch()"></p>';
-					$content .= '<input type="radio" name="method" ';
-					if (isset($method) && $method=="string") 
-					{ 
-						$content .= 'checked ';
-					}
-					$content .= 'value="string"> Som sætning<br/>';
-					$content .= '<input type="radio" name="method" ';
-					if (isset($method) && $method=="and") 
-					{ 
-						$content .= 'checked ';
-					}
-					$content .= 'value="and"> Alle ordene<br/>';
-					$content .= '<input type="radio" name="method" ';
-					if (isset($method) && $method=="or") 
-					{ 
-						$content .= 'checked ';
-					}
-					$content .= 'value="or"> Mindst et af ordene<br/>';
-					$content .= '<input type="radio" name="method" ';
-					if (isset($method) && $method=="emneord") 
-					{ 
-						$content .= 'checked ';
-					}
-					$content .= 'value="emneord"> Som emneord<br/><br/>';
-					if($secondarchive)
-					{
-						$content .= '<input type="checkbox" name="usesecond" ';
-						if (isset($usesecond) && $usesecond=="1") 
-						{ 
-							$content .= 'checked ';
-						}
-						$content .= 'value="1"> Søg i alternativ samling: '.$adb_arkivnavn2.'<br/>';
-					}
-					$content .= '</form>';
-				}
-
-
-			}
-		}
-		else
-		{
-		// GIV GENERISK FEJLBESKED
-			$content .= 'Beklager, men arkivet ser ikke ud til at være korrekt opsat.';
-		}
-	}
-	else
-	{
-	// GIV GENERISK FEJLBESKED
-		$content .= 'Beklager, men der er ikke forbindelse til databasen (opsætningen er muligvis forkert).';
-	}
-	return $content;
+function adb_security_check($arkiv = 1) {
+    $data = adb_api_request('get_check', [], $arkiv);
+    if (is_wp_error($data) || !isset($data['error']) || !is_scalar($data['error'])) { return false; }
+    if (empty($data['error']) && !isset($data['arkivnavn'])) { return false; }
+    return $data;
 }
-add_shortcode( 'adb', 'adb_shortcode' );
+function adb_security_checkurl($arkiv = 1) { return adb_api_url('get_check', [], $arkiv); }
+function adb_page_url($params = []) {
+    return add_query_arg(array_map('rawurlencode', $params), get_permalink() ?: home_url('/'));
+}
+function adb_error_html($data) {
+    $message = is_wp_error($data) ? $data->get_error_message() : adb_text($data, 'errormessage');
+    return '<p class="adb-error">'.esc_html($message ?: 'Arkivet ser ikke ud til at være korrekt opsat.').'</p>';
+}
+function adb_search_form($string, $method, $sort, $second, $secondary_name) {
+    $html = '<form class="adb-search" name="searchform" action="'.esc_url(adb_page_url(['action'=>'get_search'])).'" method="post">';
+    $html .= '<input type="hidden" name="sortering" value="'.esc_attr($sort).'">';
+    $html .= '<p><label>Søg i arkivet <input type="text" name="string" size="40" required value="'.esc_attr($string).'"></label> <button type="submit">Søg</button></p>';
+    foreach (['string'=>'Som sætning','and'=>'Alle ordene','or'=>'Mindst et af ordene','emneord'=>'Som emneord'] as $value=>$label) {
+        $html .= '<label><input type="radio" name="method" value="'.esc_attr($value).'" '.checked($method, $value, false).'> '.esc_html($label).'</label><br>';
+    }
+    if ($secondary_name !== '') {
+        $html .= '<label><input type="checkbox" name="usesecond" value="1" '.checked($second, true, false).'> Søg i alternativ samling: '.esc_html($secondary_name).'</label>';
+    }
+    return $html.'</form>';
+}
+function adb_results($rows, $sort, $second) {
+    global $adb_options;
+    $fields = ['titel'=>'Titel','periode'=>'Periode','arkiv'=>'Arkiv','materialetype'=>'Materialetype','placering'=>'Placering','registreringsdato'=>'Registreringsdato'];
+    $html = '<p>Søgningen gav <strong>'.count($rows).'</strong> resultater.</p><table class="sortable adb-results" data-sort="'.esc_attr($sort).'"><thead><tr>';
+    if ($adb_options['resultatvisning']['billede'] === '1') { $html .= '<th class="sorttable_nosort">Billede</th>'; }
+    foreach ($fields as $key=>$label) {
+        if ($key === 'titel' || $adb_options['resultatvisning'][$key] === '1') { $html .= '<th data-sort="'.esc_attr($key).'">'.esc_html($label).'</th>'; }
+    }
+    $html .= '</tr></thead><tbody>';
+    foreach ($rows as $row) {
+        $url = adb_page_url(['action'=>'get_details','id'=>adb_text($row,'id'),'arkivnummer'=>adb_text($row,'arkivnummer'),'sortering'=>$sort,'usesecond'=>$second ? '1' : '0']);
+        $html .= '<tr>';
+        if ($adb_options['resultatvisning']['billede'] === '1') {
+            $thumbnail = adb_text($row,'thumbnail') ?: plugins_url('images/noimage.gif', ADB_FILE);
+            $html .= '<td><a href="'.esc_url($url).'"><img class="adb_thumbnail" src="'.esc_url($thumbnail).'" alt="'.esc_attr(adb_text($row,'navn')).'"></a></td>';
+        }
+        foreach ($fields as $key=>$label) {
+            if ($key !== 'titel' && $adb_options['resultatvisning'][$key] !== '1') { continue; }
+            $value = adb_text($row, $key === 'registreringsdato' ? 'dato' : $key);
+            if ($key === 'titel') { $value = '<a href="'.esc_url($url).'">'.esc_html(adb_text($row,'navn')).'</a>'; }
+            elseif ($key === 'periode') {
+                $start = substr(adb_text($row,'periode_start'), 6, 4);
+                $end = substr(adb_text($row,'periode_slut'), 6, 4);
+                $value = esc_html($start === $end ? $start : $start.' - '.$end);
+            } else { $value = esc_html($value); }
+            $html .= '<td>'.$value.'</td>';
+        }
+        $html .= '</tr>';
+    }
+    return $html.'</tbody></table>';
+}
+function adb_details($data, $sort, $second) {
+    global $adb_options;
+    $html = '<h3>'.esc_html(adb_text($data,'Titel')).'</h3>';
+    if (adb_text($data,'Titel') !== adb_text($data,'Forklaring')) { $html .= wpautop(esc_html(adb_text($data,'Forklaring'))); }
+    $html .= '<div class="adb_img_container">';
+    foreach (is_array($data['Billeder'] ?? null) ? $data['Billeder'] : [] as $image) {
+        if (!is_array($image)) { continue; }
+        $html .= '<div class="adb_img_large"><a href="'.esc_url(adb_text($image,'url')).'"'.($adb_options['featherlight'] === 'featherlight' ? ' data-adb-lightbox' : '').'><img src="'.esc_url(adb_text($image,'thumpnail') ?: adb_text($image,'thumbnail')).'" alt="'.esc_attr(adb_text($data,'Titel')).'"></a></div>';
+    }
+    $html .= '</div><h4>Standardinformation</h4><table>';
+    $values = ['Registreringsnummer'=>adb_text($data,'Registreringsnummer'),'Registreringsdato'=>adb_text($data,'Registreringsdato'),'Tidsperiode'=>adb_text($data,'periode_start').' - '.adb_text($data,'periode_slut'),'Placering'=>adb_text($data,'Placering')];
+    foreach ($values as $key=>$value) { $html .= '<tr><td>'.esc_html($key).'</td><td>'.esc_html($value).'</td></tr>'; }
+    $html .= '<tr><td>Arkiv</td><td><a href="'.esc_url(adb_text($data,'Hjemmeside')).'" target="_blank" rel="noopener noreferrer">'.esc_html(adb_text($data,'Arkiv')).'</a></td></tr></table>';
+    foreach (['Filer'=>'filnavn','Links'=>'titel'] as $key=>$label) {
+        if (empty($data[$key]) || !is_array($data[$key])) { continue; }
+        $html .= '<h4>'.esc_html($key).'</h4><ul>';
+        foreach ($data[$key] as $item) {
+            if (is_array($item)) { $html .= '<li><a href="'.esc_url(adb_text($item,'url')).'" target="_blank" rel="noopener noreferrer">'.esc_html(adb_text($item,$label)).'</a></li>'; }
+        }
+        $html .= '</ul>';
+    }
+    $html .= '<h4>'.esc_html(adb_text($data,'Registreringstype')).'</h4><table>';
+    foreach (is_array($data['Registreringstypeindhold'] ?? null) ? $data['Registreringstypeindhold'] : [] as $key=>$value) {
+        if (is_scalar($value) && $value !== '') { $html .= '<tr><td>'.esc_html($key).'</td><td>'.esc_html((string)$value).'</td></tr>'; }
+    }
+    $html .= '</table>';
+    foreach (is_array($data['Emneord'] ?? null) ? $data['Emneord'] : [] as $tag) {
+        if (!is_string($tag) || $tag === '') { continue; }
+        $html .= '<form action="'.esc_url(adb_page_url(['action'=>'get_search'])).'" method="post"><input type="hidden" name="string" value="'.esc_attr($tag).'"><input type="hidden" name="method" value="emneord"><input type="hidden" name="sortering" value="'.esc_attr($sort).'"><input type="hidden" name="usesecond" value="'.($second ? '1' : '0').'"><button type="submit">'.esc_html($tag).'</button></form>';
+    }
+    return $html.'<p><a href="'.esc_url(adb_page_url()).'">Tilbage til søgning</a></p>';
+}
+function adb_shortcode($atts = [], $content = null) {
+    global $adb_options;
+    $primary = adb_security_check();
+    if (!$primary) { return '<p>Beklager, men der er ikke forbindelse til databasen (opsætningen er muligvis forkert).</p>'; }
+    if (!empty($primary['error'])) { return adb_error_html($primary); }
+    $secondary = $adb_options['database2_url'] ? adb_security_check(2) : false;
+    $secondary_name = $secondary && empty($secondary['error']) ? adb_text($secondary,'arkivnavn') : '';
+    $second = $secondary_name !== '' && adb_input($_POST, 'usesecond', adb_input($_GET,'usesecond')) === '1';
+    $archive = $second ? 2 : 1;
+    $sort = adb_choice(adb_input($_POST,'sortering', adb_input($_GET,'sortering', $adb_options['sortering'])), ['titel','periode','arkiv','materialetype','placering','registreringsdato'], 'titel');
+    $method = adb_choice(adb_input($_POST,'method'), ['string','and','or','emneord'], 'string');
+    $string = adb_input($_POST,'string');
+    $action = adb_input($_GET,'action');
+    $html = '<div class="adb-container">';
+    if ($adb_options['visnavn'] === '1') { $html .= '<h2>Søg i '.esc_html(adb_text($second ? $secondary : $primary,'arkivnavn')).'</h2>'; }
+    if ($second) { $html .= '<p><strong>Der søges i alternativ samling!</strong></p>'; }
+    if ($action === 'get_details') {
+        $id = adb_input($_GET,'id');
+        if ($id === '') { return $html.'<p>Registreringen mangler et ID.</p></div>'; }
+        $data = adb_api_request('get_details', ['id'=>$id,'arkivnummer'=>adb_input($_GET,'arkivnummer')], $archive);
+        if (!is_wp_error($data) && empty($data['error']) && !isset($data['Titel'])) { $data = new WP_Error('adb_details', 'Arkivet returnerede en ugyldig registrering.'); }
+        return $html.(is_wp_error($data) || !empty($data['error']) ? adb_error_html($data) : adb_details($data,$sort,$second)).'</div>';
+    }
+    $form = adb_search_form($string,$method,$sort,$second,$secondary_name);
+    $search = $action === 'get_search';
+    if (!$search || in_array($adb_options['sogplacering'], ['2','3'], true)) { $html .= $form; }
+    if ($search) {
+        $data = $string === '' ? new WP_Error('adb_empty','En søgning kan ikke være tom.') : adb_api_request('get_search', ['string'=>$string,'method'=>$method], $archive);
+        if (is_wp_error($data) || !empty($data['error'])) { $html .= adb_error_html($data); }
+        elseif (!$data) { $html .= '<p>Søgningen gav <strong>ingen</strong> resultater. Prøv at udvide din søgning!</p>'; }
+        else {
+            foreach ($data as $row) {
+                if (!is_array($row) || !isset($row['id'], $row['navn'])) { return $html.adb_error_html(new WP_Error('adb_rows','Arkivet returnerede et ugyldigt søgeresultat.')).'</div>'; }
+            }
+            $html .= adb_results($data,$sort,$second);
+        }
+        if (in_array($adb_options['sogplacering'], ['1','3'], true)) { $html .= $form; }
+    }
+    return $html.'</div>';
+}
+add_shortcode('adb', 'adb_shortcode');

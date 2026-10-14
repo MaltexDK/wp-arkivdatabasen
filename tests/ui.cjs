@@ -1,0 +1,25 @@
+const {JSDOM} = require('jsdom');
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const form = '<form class="adb-search"><input name="string"><input name="sortering" value="titel"></form>';
+const dom = new JSDOM('<div class="adb-container">'+form+'<table class="sortable adb-results" data-sort="titel"><thead><tr><th data-sort="titel">Titel</th></tr></thead><tbody><tr><td>Zebra</td></tr><tr><td>Æble</td></tr><tr><td>Alpha</td></tr></tbody></table>'+form+'</div>', {runScripts:'outside-only'});
+const {window} = dom;
+window.eval(fs.readFileSync('includes/sorttable.js', 'utf8'));
+window.eval(fs.readFileSync('includes/adb-ui.js', 'utf8'));
+window.document.dispatchEvent(new window.Event('DOMContentLoaded'));
+const table = window.document.querySelector('table');
+assert.equal(table.tBodies[0].rows[0].textContent, 'Alpha', 'Initial table sorting');
+table.querySelector('th').click();
+window.document.querySelectorAll('form').forEach(form => {
+  assert.equal(form.elements.sortering.value, 'titel');
+  const blank = new window.Event('submit', {cancelable:true});
+  form.dispatchEvent(blank);
+  assert.equal(blank.defaultPrevented, true, 'Blank search rejected');
+  form.elements.string.value = 'Æble';
+  form.elements.string.dispatchEvent(new window.Event('input'));
+  const search = new window.Event('submit', {cancelable:true});
+  form.dispatchEvent(search);
+  assert.equal(search.defaultPrevented, false, 'Nonempty search accepted');
+});
+console.log('PASS: sorting and independent search forms');
+window.close();

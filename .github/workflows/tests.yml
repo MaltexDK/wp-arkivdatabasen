@@ -1,0 +1,52 @@
+name: Plugin tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  wordpress:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.3', '8.4']
+    services:
+      mysql:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: ci-only-password
+          MARIADB_DATABASE: wordpress
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=2s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, iconv
+          tools: wp-cli
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: UI tests
+        run: npm ci --ignore-scripts && npm test
+      - name: Syntax and release package
+        run: |
+          find . -name '*.php' -print0 | xargs -0 -n1 php -d short_open_tag=0 -l
+          node --check includes/adb-ui.js
+          python3 scripts/build-release.py
+      - name: Install packaged plugin in WordPress
+        run: |
+          mkdir -p /tmp/adb-wordpress
+          wp core download --path=/tmp/adb-wordpress --version=6.8.3
+          wp config create --path=/tmp/adb-wordpress --dbname=wordpress --dbuser=root --dbpass=ci-only-password --dbhost=127.0.0.1
+          wp core install --path=/tmp/adb-wordpress --url=http://example.test --title=Test --admin_user=developer --admin_email=developer@example.test --admin_password=ci-only-password --skip-email
+          wp plugin install "$PWD/dist/arkivdatabasen.zip" --path=/tmp/adb-wordpress --activate
+      - name: Regression tests
+        env:
+          WP_LOAD_PATH: /tmp/adb-wordpress/wp-load.php
+        run: php -d short_open_tag=0 tests/regression.php

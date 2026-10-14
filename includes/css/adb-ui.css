@@ -1,0 +1,5 @@
+.adb-results th { cursor: pointer; }
+.adb-results th:not(.sorttable_nosort)::after { content: ' ▴▾'; }
+.adb-lightbox { max-width: 90vw; max-height: 90vh; }
+.adb-lightbox img { display: block; max-width: 85vw; max-height: 75vh; }
+.adb-lightbox::backdrop { background: rgb(0 0 0 / 70%); }

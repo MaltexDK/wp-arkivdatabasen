@@ -1,0 +1,26 @@
+name: Release plugin
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+  package:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+      - name: Check PHP syntax
+        run: find . -name '*.php' -print0 | xargs -0 -n1 php -d short_open_tag=0 -l
+      - name: Build installation ZIP
+        run: python3 scripts/build-release.py "$GITHUB_REF_NAME"
+      - name: Publish release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/arkivdatabasen.zip --verify-tag --generate-notes
