@@ -1,5 +1,12 @@
 # Ændringer
 
+## 1.4
+
+- Postens billeder vises i et responsivt grid med 16 px mellemrum og automatisk flere rækker.
+- Ensartede billedfelter med diskret baggrund og afrundede kanter; billedernes proportioner bevares uden beskæring.
+- Fælles billedlayout for både Standard- og Valby-stilen.
+- Synlig tastaturfokusmarkering på billedlinks; eksisterende lightbox bevares.
+
 ## 1.3.1
 
 - Forfatternavnet er rettet til Maltex Gruppen.
