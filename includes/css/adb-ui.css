@@ -3,3 +3,57 @@
 .adb-lightbox { max-width: 90vw; max-height: 90vh; }
 .adb-lightbox img { display: block; max-width: 85vw; max-height: 75vh; }
 .adb-lightbox::backdrop { background: rgb(0 0 0 / 70%); }
+
+/* Shared detail gallery for both the Standard and Valby styles. */
+.adb-container .adb_img_container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+    gap: 16px;
+    margin: 0 0 24px;
+}
+
+.adb-container .adb_img_container > .adb_img_large {
+    float: none;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.adb-container .adb_img_large > a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #f7f7f7;
+}
+
+.adb-container .adb_img_large > a:hover {
+    border-color: #666;
+}
+
+.adb-container .adb_img_large > a:focus-visible {
+    outline: 2px solid #005fcc;
+    outline-offset: 2px;
+}
+
+.adb-container .adb_img_large img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    margin: 0;
+    border: 0;
+}
+
+.adb-container .adb_img_large a:hover img {
+    border: 0;
+}
