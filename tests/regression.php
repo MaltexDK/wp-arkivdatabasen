@@ -13,8 +13,8 @@ $mode='normal'; $asset=true;
 add_filter('pre_http_request',function($pre,$args,$url) use (&$mode,&$asset) {
     $response=function($body,$code=200) { return ['headers'=>[],'body'=>$body,'response'=>['code'=>$code,'message'=>'OK'],'cookies'=>[]]; };
     if (wp_parse_url($url,PHP_URL_HOST)==='api.github.com') {
-        if (strpos($url,'/releases/latest')!==false) { return $response(wp_json_encode(['tag_name'=>'v1.4.0','draft'=>false,'prerelease'=>false,'created_at'=>'2026-10-14T00:00:00Z','body'=>'Stable update','zipball_url'=>'https://example.test/source.zip','assets'=>$asset ? [['name'=>'arkivdatabasen.zip','browser_download_url'=>'https://github.com/MaltexDK/wp-arkivdatabasen/releases/download/v1.4.0/arkivdatabasen.zip','download_count'=>1]] : []])); }
-        if (strpos($url,'/contents/arkivdatabasen.php')!==false) { return $response(wp_json_encode(['encoding'=>'base64','content'=>base64_encode("<?php\n/*\nPlugin Name: Arkivdatabasen\nVersion: 1.4.0\n*/")])); }
+        if (strpos($url,'/releases/latest')!==false) { return $response(wp_json_encode(['tag_name'=>'v1.4.2','draft'=>false,'prerelease'=>false,'created_at'=>'2026-10-14T00:00:00Z','body'=>'Stable update','zipball_url'=>'https://example.test/source.zip','assets'=>$asset ? [['name'=>'arkivdatabasen.zip','browser_download_url'=>'https://github.com/MaltexDK/wp-arkivdatabasen/releases/download/v1.4.2/arkivdatabasen.zip','download_count'=>1]] : []])); }
+        if (strpos($url,'/contents/arkivdatabasen.php')!==false) { return $response(wp_json_encode(['encoding'=>'base64','content'=>base64_encode("<?php\n/*\nPlugin Name: Arkivdatabasen\nVersion: 1.4.2\n*/")])); }
         return $response('[]');
     }
     if (wp_parse_url($url,PHP_URL_HOST)!=='archive.example.test') { return new WP_Error('test','External requests disabled'); }
@@ -70,8 +70,8 @@ $clean=adb_sanitize_settings(['stylesheet'=>'../../bad','resultatvisning'=>'bad'
 adb_assert($clean['stylesheet']==='standard' && $clean['api_key']==='key','Settings validation');
 $adb_options=adb_defaults(); adb_assert(strpos(do_shortcode('[adb]'),'Beklager')!==false,'Missing setup');
 $update=$adb_update_checker->requestUpdate();
-adb_assert($update && $update->version==='1.4.0','Release version');
-adb_assert(strpos($update->download_url,'/releases/download/v1.4.0/arkivdatabasen.zip')!==false,'Release asset');
+adb_assert($update && $update->version==='1.4.2','Release version');
+adb_assert(strpos($update->download_url,'/releases/download/v1.4.2/arkivdatabasen.zip')!==false,'Release asset');
 $asset=false; adb_assert($adb_update_checker->requestUpdate()===null,'Source fallback rejected');
 adb_assert(get_option('adb_settings') === $stored_settings, 'Saved settings changed');
 $transient = $adb_update_checker->injectUpdate((object)['response'=>[], 'no_update'=>[]]);
