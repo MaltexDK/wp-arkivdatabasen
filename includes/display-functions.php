@@ -44,17 +44,17 @@ function adb_page_url($params = []) {
 }
 function adb_error_html($data) {
     $message = is_wp_error($data) ? $data->get_error_message() : adb_text($data, 'errormessage');
-    return '<p class="adb-error">'.esc_html($message ?: 'Arkivet ser ikke ud til at være korrekt opsat.').'</p>';
+    return '<p class="adb-error">'.adb_format_text($message ?: 'Arkivet ser ikke ud til at være korrekt opsat.').'</p>';
 }
 function adb_search_form($string, $method, $sort, $second, $secondary_name) {
     $html = '<form class="adb-search" name="searchform" action="'.esc_url(adb_page_url(['action'=>'get_search'])).'" method="post">';
     $html .= '<input type="hidden" name="sortering" value="'.esc_attr($sort).'">';
     $html .= '<p><label>Søg i arkivet <input type="text" name="string" size="40" required value="'.esc_attr($string).'"></label> <button type="submit">Søg</button></p>';
     foreach (['string'=>'Som sætning','and'=>'Alle ordene','or'=>'Mindst et af ordene','emneord'=>'Som emneord'] as $value=>$label) {
-        $html .= '<label><input type="radio" name="method" value="'.esc_attr($value).'" '.checked($method, $value, false).'> '.esc_html($label).'</label><br>';
+        $html .= '<label><input type="radio" name="method" value="'.esc_attr($value).'" '.checked($method, $value, false).'> '.adb_format_text($label).'</label><br>';
     }
     if ($secondary_name !== '') {
-        $html .= '<label><input type="checkbox" name="usesecond" value="1" '.checked($second, true, false).'> Søg i alternativ samling: '.esc_html($secondary_name).'</label>';
+        $html .= '<label><input type="checkbox" name="usesecond" value="1" '.checked($second, true, false).'> Søg i alternativ samling: '.adb_format_text($secondary_name).'</label>';
     }
     return $html.'</form>';
 }
@@ -64,7 +64,7 @@ function adb_results($rows, $sort, $second) {
     $html = '<p>Søgningen gav <strong>'.count($rows).'</strong> resultater.</p><table class="sortable adb-results" data-sort="'.esc_attr($sort).'"><thead><tr>';
     if ($adb_options['resultatvisning']['billede'] === '1') { $html .= '<th class="sorttable_nosort">Billede</th>'; }
     foreach ($fields as $key=>$label) {
-        if ($key === 'titel' || $adb_options['resultatvisning'][$key] === '1') { $html .= '<th data-sort="'.esc_attr($key).'">'.esc_html($label).'</th>'; }
+        if ($key === 'titel' || $adb_options['resultatvisning'][$key] === '1') { $html .= '<th data-sort="'.esc_attr($key).'">'.adb_format_text($label).'</th>'; }
     }
     $html .= '</tr></thead><tbody>';
     foreach ($rows as $row) {
@@ -77,12 +77,12 @@ function adb_results($rows, $sort, $second) {
         foreach ($fields as $key=>$label) {
             if ($key !== 'titel' && $adb_options['resultatvisning'][$key] !== '1') { continue; }
             $value = adb_text($row, $key === 'registreringsdato' ? 'dato' : $key);
-            if ($key === 'titel') { $value = '<a href="'.esc_url($url).'">'.esc_html(adb_text($row,'navn')).'</a>'; }
+            if ($key === 'titel') { $value = '<a href="'.esc_url($url).'">'.adb_format_text(adb_text($row,'navn')).'</a>'; }
             elseif ($key === 'periode') {
                 $start = substr(adb_text($row,'periode_start'), 6, 4);
                 $end = substr(adb_text($row,'periode_slut'), 6, 4);
-                $value = esc_html($start === $end ? $start : $start.' - '.$end);
-            } else { $value = esc_html($value); }
+                $value = adb_format_text($start === $end ? $start : $start.' - '.$end);
+            } else { $value = adb_format_text($value); }
             $html .= '<td>'.$value.'</td>';
         }
         $html .= '</tr>';
@@ -91,8 +91,8 @@ function adb_results($rows, $sort, $second) {
 }
 function adb_details($data, $sort, $second) {
     global $adb_options;
-    $html = '<h3>'.esc_html(adb_text($data,'Titel')).'</h3>';
-    if (adb_text($data,'Titel') !== adb_text($data,'Forklaring')) { $html .= wpautop(esc_html(adb_text($data,'Forklaring'))); }
+    $html = '<h3>'.adb_format_text(adb_text($data,'Titel')).'</h3>';
+    if (adb_text($data,'Titel') !== adb_text($data,'Forklaring')) { $html .= '<p>'.adb_format_text(adb_text($data,'Forklaring')).'</p>'; }
     $html .= '<div class="adb_img_container">';
     foreach (is_array($data['Billeder'] ?? null) ? $data['Billeder'] : [] as $image) {
         if (!is_array($image)) { continue; }
@@ -100,24 +100,24 @@ function adb_details($data, $sort, $second) {
     }
     $html .= '</div><h4>Standardinformation</h4><table>';
     $values = ['Registreringsnummer'=>adb_text($data,'Registreringsnummer'),'Registreringsdato'=>adb_text($data,'Registreringsdato'),'Tidsperiode'=>adb_text($data,'periode_start').' - '.adb_text($data,'periode_slut'),'Placering'=>adb_text($data,'Placering')];
-    foreach ($values as $key=>$value) { $html .= '<tr><td>'.esc_html($key).'</td><td>'.esc_html($value).'</td></tr>'; }
-    $html .= '<tr><td>Arkiv</td><td><a href="'.esc_url(adb_text($data,'Hjemmeside')).'" target="_blank" rel="noopener noreferrer">'.esc_html(adb_text($data,'Arkiv')).'</a></td></tr></table>';
+    foreach ($values as $key=>$value) { $html .= '<tr><td>'.adb_format_text($key).'</td><td>'.adb_format_text($value).'</td></tr>'; }
+    $html .= '<tr><td>Arkiv</td><td><a href="'.esc_url(adb_text($data,'Hjemmeside')).'" target="_blank" rel="noopener noreferrer">'.adb_format_text(adb_text($data,'Arkiv')).'</a></td></tr></table>';
     foreach (['Filer'=>'filnavn','Links'=>'titel'] as $key=>$label) {
         if (empty($data[$key]) || !is_array($data[$key])) { continue; }
-        $html .= '<h4>'.esc_html($key).'</h4><ul>';
+        $html .= '<h4>'.adb_format_text($key).'</h4><ul>';
         foreach ($data[$key] as $item) {
-            if (is_array($item)) { $html .= '<li><a href="'.esc_url(adb_text($item,'url')).'" target="_blank" rel="noopener noreferrer">'.esc_html(adb_text($item,$label)).'</a></li>'; }
+            if (is_array($item)) { $html .= '<li><a href="'.esc_url(adb_text($item,'url')).'" target="_blank" rel="noopener noreferrer">'.adb_format_text(adb_text($item,$label)).'</a></li>'; }
         }
         $html .= '</ul>';
     }
-    $html .= '<h4>'.esc_html(adb_text($data,'Registreringstype')).'</h4><table>';
+    $html .= '<h4>'.adb_format_text(adb_text($data,'Registreringstype')).'</h4><table>';
     foreach (is_array($data['Registreringstypeindhold'] ?? null) ? $data['Registreringstypeindhold'] : [] as $key=>$value) {
-        if (is_scalar($value) && $value !== '') { $html .= '<tr><td>'.esc_html($key).'</td><td>'.esc_html((string)$value).'</td></tr>'; }
+        if (is_scalar($value) && $value !== '') { $html .= '<tr><td>'.adb_format_text($key).'</td><td>'.adb_format_text((string)$value).'</td></tr>'; }
     }
     $html .= '</table>';
     foreach (is_array($data['Emneord'] ?? null) ? $data['Emneord'] : [] as $tag) {
         if (!is_string($tag) || $tag === '') { continue; }
-        $html .= '<form action="'.esc_url(adb_page_url(['action'=>'get_search'])).'" method="post"><input type="hidden" name="string" value="'.esc_attr($tag).'"><input type="hidden" name="method" value="emneord"><input type="hidden" name="sortering" value="'.esc_attr($sort).'"><input type="hidden" name="usesecond" value="'.($second ? '1' : '0').'"><button type="submit">'.esc_html($tag).'</button></form>';
+        $html .= '<form action="'.esc_url(adb_page_url(['action'=>'get_search'])).'" method="post"><input type="hidden" name="string" value="'.esc_attr($tag).'"><input type="hidden" name="method" value="emneord"><input type="hidden" name="sortering" value="'.esc_attr($sort).'"><input type="hidden" name="usesecond" value="'.($second ? '1' : '0').'"><button type="submit">'.adb_format_text($tag).'</button></form>';
     }
     return $html.'<p><a href="'.esc_url(adb_page_url()).'">Tilbage til søgning</a></p>';
 }
@@ -135,7 +135,7 @@ function adb_shortcode($atts = [], $content = null) {
     $string = adb_input($_POST,'string');
     $action = adb_input($_GET,'action');
     $html = '<div class="adb-container">';
-    if ($adb_options['visnavn'] === '1') { $html .= '<h2>Søg i '.esc_html(adb_text($second ? $secondary : $primary,'arkivnavn')).'</h2>'; }
+    if ($adb_options['visnavn'] === '1') { $html .= '<h2>Søg i '.adb_format_text(adb_text($second ? $secondary : $primary,'arkivnavn')).'</h2>'; }
     if ($second) { $html .= '<p><strong>Der søges i alternativ samling!</strong></p>'; }
     if ($action === 'get_details') {
         $id = adb_input($_GET,'id');

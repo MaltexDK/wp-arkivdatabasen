@@ -45,6 +45,26 @@ foreach (['network','http','json','scalar','empty'] as $mode) { adb_assert(strpo
 $mode='normal'; $_GET=['action'=>'get_details','id'=>'1']; $_POST=[];
 $html=do_shortcode('[adb]');
 adb_assert(strpos($html,'javascript:')===false && strpos($html,'<script>')===false,'Details escaping');
+
+foreach (["\n", "\r\n", "\r", '<br>', '<br/>', '<br />', '<BR>', "\r<br>", "<br>\n"] as $break) {
+    adb_assert(adb_format_text('Før'.$break.'Efter') === "Før<br>\nEfter", 'Line break rendering '.json_encode($break));
+}
+adb_assert(adb_format_text("A\n\nB") === "A<br>\n<br>\nB", 'Blank lines preserved');
+adb_assert(adb_format_text('A<br><br>B') === "A<br>\n<br>\nB", 'Repeated legacy breaks preserved');
+adb_assert(adb_format_text('A\\nB') === 'A\\nB', 'Literal backslash n preserved');
+adb_assert(adb_format_text('<script>alert(1)</script><img src=x onerror=evil>') === '&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=evil&gt;', 'Only line breaks become HTML');
+adb_assert(strpos(adb_format_text('&lt;br&gt;'), '<br>') === false, 'Encoded tags remain text');
+$multiline = "Før<br>Efter";
+$detail = adb_details(['Titel'=>$multiline, 'Forklaring'=>$multiline."\nSlut", 'Placering'=>$multiline, 'Arkiv'=>$multiline,
+    'Filer'=>[['filnavn'=>$multiline]], 'Links'=>[['titel'=>$multiline]], 'Registreringstype'=>$multiline,
+    'Registreringstypeindhold'=>['Beskrivelse'=>$multiline], 'Emneord'=>[$multiline]], 'titel', false);
+$visible_detail = preg_replace('/<input\\b[^>]*>/i', '', $detail);
+adb_assert(strpos($visible_detail, '&lt;br&gt;') === false, 'All visible detail text uses the shared formatter');
+adb_assert(substr_count($detail, "Før<br>\nEfter") === 9, 'Consistent rendering across detail fields');
+$adb_options['resultatvisning']['placering']='1';
+$results = adb_results([['id'=>'1', 'navn'=>$multiline, 'placering'=>$multiline]], 'titel', false);
+adb_assert(substr_count($results, "Før<br>\nEfter") === 2, 'Search fields use the shared formatter');
+
 $_GET=['action'=>['bad']]; $_POST=['string'=>['bad']]; adb_assert(is_string(do_shortcode('[adb]')),'Array input');
 $clean=adb_sanitize_settings(['stylesheet'=>'../../bad','resultatvisning'=>'bad','api_key'=>' key ']);
 adb_assert($clean['stylesheet']==='standard' && $clean['api_key']==='key','Settings validation');

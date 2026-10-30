@@ -1,5 +1,10 @@
 # Ændringer
 
+## Ikke udgivet
+
+- API’ets `<br>`-tags og almindelige linjeskift vises ensartet i postvisning og søgeresultater.
+- Bevarer tomme linjer og beskytter fortsat mod uønsket HTML; håndterer også API’ets konvertering af Windows-linjeskift.
+
 ## 1.4
 
 - Postens billeder vises i et responsivt grid med 16 px mellemrum og automatisk flere rækker.
