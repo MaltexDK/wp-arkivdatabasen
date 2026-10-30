@@ -1,6 +1,6 @@
 # Ændringer
 
-## Ikke udgivet
+## 1.4.1
 
 - API’ets `<br>`-tags og almindelige linjeskift vises ensartet i postvisning og søgeresultater.
 - Bevarer tomme linjer og beskytter fortsat mod uønsket HTML; håndterer også API’ets konvertering af Windows-linjeskift.
