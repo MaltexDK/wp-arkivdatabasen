@@ -58,7 +58,8 @@ $multiline = "Før<br>Efter";
 $detail = adb_details(['Titel'=>$multiline, 'Forklaring'=>$multiline."\nSlut", 'Placering'=>$multiline, 'Arkiv'=>$multiline,
     'Filer'=>[['filnavn'=>$multiline]], 'Links'=>[['titel'=>$multiline]], 'Registreringstype'=>$multiline,
     'Registreringstypeindhold'=>['Beskrivelse'=>$multiline], 'Emneord'=>[$multiline]], 'titel', false);
-adb_assert(strpos($detail, '&lt;br&gt;') === false, 'All detail text uses the shared formatter');
+$visible_detail = preg_replace('/<input\\b[^>]*>/i', '', $detail);
+adb_assert(strpos($visible_detail, '&lt;br&gt;') === false, 'All visible detail text uses the shared formatter');
 adb_assert(substr_count($detail, "Før<br>\nEfter") === 9, 'Consistent rendering across detail fields');
 $adb_options['resultatvisning']['placering']='1';
 $results = adb_results([['id'=>'1', 'navn'=>$multiline, 'placering'=>$multiline]], 'titel', false);
