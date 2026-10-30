@@ -42,3 +42,11 @@ function adb_input($source, $key, $default = '') {
 function adb_text($data, $key) {
     return is_scalar($data[$key] ?? null) ? (string)$data[$key] : '';
 }
+
+// Render API text consistently without allowing arbitrary HTML.
+// A legacy API may leave CR before <br> when converting Windows line endings.
+function adb_format_text($text) {
+    $text = str_replace(["\r\n", "\r"], "\n", (string)$text);
+    $text = preg_replace('/\n?<br\s*\/?\s*>\n?/i', "\n", $text);
+    return nl2br(esc_html($text), false);
+}
